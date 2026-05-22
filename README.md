@@ -105,6 +105,10 @@ cav.print_to_pymol("cage_cavity.pml")
 print("Cavity_volume= ", volume, " A3")
 ```
 
+To select the largest cavity, or reduce noise present around the desired cavity, the following setting can be included:
+```cav.clustering_to_remove_cavity_noise = 'size' # size, dist or false ```
+Alternatively, the cavity closest to the center could be selected:
+```cav.clustering_to_remove_cavity_noise = 'dist' ```
 
 ## Python module  additional examples
 CageCavityCalc, as a Python module, integrates well with more complex programs. We provide several examples showcasing its core functionalities and the types of analyses achievable.
