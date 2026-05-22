@@ -35,6 +35,9 @@ Download and install Miniconda3 (https://docs.conda.io/en/latest/miniconda.html)
 Open the “Anaconda Prompt” and execute the following commands:
 
 ```
+conda create -n Cavity python=3.10
+conda activate Cavity
+conda install pip
 pip install CageCavityCalc
 conda install -c conda-forge pymol-open-source
 pip uninstall pyqt5
@@ -42,12 +45,21 @@ pip install pyqt5 qtpy
 conda install -c conda-forge openbabel
 conda install -c conda-forge mdanalysis
 pymol
+```
 
 Then, install the PyMol the plugin: Plugin > Plugin Manager > Install New Plugin.
 Choose “Install from local file” and locate the __init__.py file in the pymol_plugin folder of C3
 (typically located in C:\Users\UserName\miniconda3\Lib\site-packages\CageCavityCalc\pymol_plugin).
+
+If the openbabel installation is unsuccesful, or you obtain errors regarding openbabel, you can install openbabel instead using:
+```
+pip install openbabel-wheel                                                                                                       …
 ```
 
+You can check the installation using:
+```
+python -c "import openbabel; print(openbabel.__version__)"
+```
 
 ## Quick start
 CageCavityCalc can be used from the PyMol plugin, throught the command line, and from a Python file by loading the CageCavityCalc module. 
@@ -63,8 +75,8 @@ CageCavityCalc can be used from the PyMol plugin, throught the command line, and
 For example, to use C3 from the command line the user needs to executee in the console the following commands: $python CageCavityCalc.py -f cage.pdb -o cage_cavity.pdb -gr 1.5. This order will load the cage.pdb file containing the cage chemical structure and the cavity of the cage will be calculated using a grid spacing of 1.5 Å. Additional arguments can be used as described in Table S1, allowing specifying the distance threshold used to calculate 90º angle, the use of the clustering algorithm to remove noisy cavity points that does not belogin to the main cavity, calculation of hydrophobicity specifying the method and distance function, calculation of hydrophobicity, save a PyMol pml file, or print additional information of the calculations in the terminal.
 
 Arguments that can be used int the C3 Python module though the command line.
-> -f	Input file (*pdb, *mol2, ...)\
-> -o	Output file (*pdb, *mol2, ...). If this argument is not used, the automatic generation of output filenames is performed.\
+> -f	Input file (*pdb, *mol2, *.xyz ...)\
+> -o	Output file (*pdb, *mol2, *.xyz ...). If this argument is not used, the automatic generation of output filenames is performed.\
 > -gr X	Grid spacing resolution (Angstroms). Default 1.0\
 > -d90a X	Automatic distance threshold to calculate 90 deg angle as X times window radius. Default 2.0. If the calculated threshold distance is smaller than 5 Å, it is set to 5 Å to ensure probe to find atoms to calculate the angle.\
 > -d90m X	Manual distance threshold to calculate 90 deg angle in Å\
@@ -81,7 +93,7 @@ Arguments that can be used int the C3 Python module though the command line.
 
 
 ### Python module
-To use C3 as in a Python script, it is required to load the module, followed by the initialization of the cavity, load the .pdb file of the cage, followed by the cavity volume calculation (using the default values of grid spacing resolution 1 Å and distance threshold for the 90-degree calculation of 5 Å) and saving the corresponding *.pdb file and PyMol *.pml file for cavity visualization in PyMol.
+To use C3 as in a Python script, it is required to load the module, followed by the initialization of the cavity, load the .pdb or .xyz file of the cage, followed by the cavity volume calculation (using the default values of grid spacing resolution 1 Å and distance threshold for the 90-degree calculation of 5 Å) and saving the corresponding *.pdb file and PyMol *.pml file for cavity visualization in PyMol.
 
 ```
 from CageCavityCalc.CageCavityCalc import cavity
@@ -218,6 +230,145 @@ FileTraj.close()
 
 ```
 
+## Example 5 (Paula)
+You can obtain the cavity information from a file containing multiple structures (such as a collection of structurs or a trajectory) using ASE. The desired cavity can be by setting `cav.clustering_to_remove_cavity_noise`. The string 'size' will select the largest cavity, the string 'dist' will select the cavity closest to the center.
+
+```
+import os
+from ase.io import read, write
+from CageCavityCalc.CageCavityCalc import cavity
+
+# Read all structures
+all_configs = read('structures.xyz', index=':')
+print(f"Found {len(all_configs)} frames")
+
+all_indices = []
+all_values = []
+
+wrong = [] # Add ID's of structures you don't want to include in the calculation
+volume = []
+
+distance_threshold_for_90_deg_angle = 2.0
+grid_spacing = 1.0
+
+with open("all_indices", "w") as f_idx, open("all_values", "w") as f_val:
+    for i, min in enumerate(all_configs):
+        print(f"Processing frame {i+1}")
+
+        xyzfile = f"min_{i}.xyz"
+        min.write(xyzfile)
+        cav = cavity() #reinitialize every loop
+        cav.read_file(xyzfile)
+        cav.grid_spacing = float(grid_spacing)
+        cav.clustering_to_remove_cavity_noise = "size" #size, false, dist
+        window_radius = cav.calculate_window()
+        cav.distance_threshold_for_90_deg_angle = window_radius * distance_threshold_for_90_deg_angle
+        if cav.distance_threshold_for_90_deg_angle < 5:
+            cav.distance_threshold_for_90_deg_angle = 5
+        volume = cav.calculate_volume()
+        if (i + 1) in wrong:
+            all_indices.append(f"-{i + 1}")
+        else:
+            all_indices.append(f"{i + 1}")
+
+        all_values.append(f"{volume:.2f}")
+
+        f_idx.write(f"{all_indices[-1]}\n")
+        f_idx.flush()
+        f_val.write(f"{volume:.2f}\n")
+        f_val.flush()
+        os.remove(xyzfile)
+        print(f"Frame {i+1}: {volume:.2f} A3")  # progress indicator
+```
+
+## Example 6 (Paula)
+To visualise cavities throughout a trajectory, ASE can also be used. To allow visualisation in pymol, the dummy atoms are replaced by He atoms. Additionally, the He-atom count needs to be consistent along the trajectory, which is ensured by padding each structure with extra He-atoms up to the maximum found among the structures in the trajectory. In this example, the stationary.points.xyz file was obtained using the PATHSAMPLE method created by professor David Wales.
+
+```
+import os
+from ase.io import read, write
+from ase import Atoms
+import numpy as np
+import re
+import matplotlib.pyplot as plt
+from CageCavityCalc.CageCavityCalc import cavity
+
+grid_spacing = 1.0
+distance_threshold_for_90_deg_angle = 2.0
+
+# What to do with D dummy atoms in ASE?
+def fix_dummy(filename_in, filename_out):
+    with open(filename_in) as f:
+        content = f.read()
+    content = re.sub(r'\bD\b', 'He', content)  # replace D with He
+    with open(filename_out, "w") as f:
+        f.write(content)
+
+volume_path = []
+stationarypoints = read('stationary.points.xyz', index=":")
+
+cavity_frames = []
+indices=[]
+volumes=[]
+for i, sp in enumerate(stationarypoints):
+    xyzfile = f"sp_{i}.xyz"          # or however your frames are named
+    sp.write(xyzfile)                   # write the ASE Atoms object to a temp xyz
+    cav = cavity()
+    cav.read_file(xyzfile)
+    window_radius = cav.calculate_window()
+    cav.distance_threshold_for_90_deg_angle = window_radius * distance_threshold_for_90_deg_angle
+    cav.clustering_to_remove_cavity_noise = "size" #size, false, dist
+    if cav.distance_threshold_for_90_deg_angle < 5:
+        cav.distance_threshold_for_90_deg_angle = 5
+ 
+    volume = cav.calculate_volume()
+    volume_path.append(volume)
+    indices.append(i)
+    volumes.append(volume)
+    cav.print_to_file(f"cage_cavity_{i}.xyz")
+    fix_dummy(f"cage_cavity_{i}.xyz", f"cage_cavity_{i}_fixed.xyz")
+    cavity_frames.append(read(f"cage_cavity_{i}_fixed.xyz"))
+    os.remove(xyzfile)
+    os.remove(f"cage_cavity_{i}.xyz")
+    os.remove(f"cage_cavity_{i}_fixed.xyz")
+    print(f"Stationary point {i+1}: {volume:.2f} A3")
+
+with open("volumes.txt", "w") as f:
+    f.write("Stationary_point Volume_A3\n")
+    for i, v in zip(indices, volumes):
+        f.write(f"{i} {v:.3f}\n")
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(indices, volumes, marker='o', markersize=3, linewidth=1)
+plt.xlabel("Stationary Point")
+plt.ylabel("Cavity Volume (Å³)")
+plt.title("Cavity Volume vs Stationary Point")
+plt.tight_layout()
+plt.savefig("volume_plot.png", dpi=300)
+plt.show()
+print(f"Extracted {len(indices)} data points")
+
+atom_max = max(len(f) for f in cavity_frames) 
+
+ref_pos = None
+for frame in cavity_frames:
+    he_atoms = [a for a in frame if a.symbol == "He"]
+    if he_atoms:
+        ref_pos = he_atoms[0].position
+        break
+if ref_pos is None:
+    ref_pos = np.zeros(3)
+
+with open("cavity_traj.xyz", "w") as traj:
+    for frame in cavity_frames:
+        n_missing = atom_max - len(frame)
+        if n_missing > 0:
+            pad = Atoms("He" * n_missing, positions=[ref_pos] * n_missing)
+            frame = frame + pad
+        write(traj, frame, format="xyz")
+
+np.savetxt("volume_path.txt", volume_path)
 
 ### Other
 To make the calculation loud use CAV_LOG_LEVEL environmental variable
@@ -225,7 +376,6 @@ To make the calculation loud use CAV_LOG_LEVEL environmental variable
 ```commandline
 export CAV_LOG_LEVEL=INFO
 ```
-
 
 ## Detailed installation instructions:
 
@@ -263,5 +413,9 @@ File "C:\Users\user\Documents\pymol\lib\site-packages\pmg_tk\startup\pymol_plugi
     grid_size = float(form.grid_edit.text())
 ValueError: could not convert string to float: '1,0'
 This error is fixed by changing the regional settings of the operating sistems to use a "." to separate decimals.
+On MacOS you can find them under:
+System Settings > Language & Region > Number format > 1,234,567.89
+<img width="944" height="97" alt="image" src="https://github.com/user-attachments/assets/9223bce1-1e24-4365-8925-30ffc044ac2d" />
 
 Error "ValueError: data must be of shape (n, m), where there are n points of dimension m" is typical when CageCavityCalc is not able to determine the cavity (i.e. cavity volume = 0 A^3). To solve this error it is recommended to reduce the grid size to run again the cavity calculation to cheit if CageCavityCalc is able to determine the cavity. 
+
