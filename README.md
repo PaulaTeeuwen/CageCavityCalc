@@ -311,7 +311,7 @@ cavity_frames = []
 indices=[]
 volumes=[]
 for i, sp in enumerate(stationarypoints):
-    xyzfile = f"sp_{i}.xyz"          # or however your frames are named
+    xyzfile = f"sp_{i}.xyz"          
     sp.write(xyzfile)                   # write the ASE Atoms object to a temp xyz
     cav = cavity()
     cav.read_file(xyzfile)
@@ -369,6 +369,7 @@ with open("cavity_traj.xyz", "w") as traj:
         write(traj, frame, format="xyz")
 
 np.savetxt("volume_path.txt", volume_path)
+```
 
 ### Other
 To make the calculation loud use CAV_LOG_LEVEL environmental variable
