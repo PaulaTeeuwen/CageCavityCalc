@@ -43,7 +43,7 @@ conda install -c conda-forge pymol-open-source
 pip uninstall pyqt5
 pip install pyqt5 qtpy
 conda install -c conda-forge openbabel
-conda install -c conda-forge mdanalysis
+pip install MDAnalysis
 pymol
 ```
 
@@ -360,7 +360,7 @@ The software CageCavityCalc (C3) is compatible with Linux, Windows, and Mac. The
 
 First it is required to install Miniconda3 and create a Python 3.10–3.13 environment (see Command line installation above). Miniconda3 can be obtained from https://docs.conda.io/en/latest/miniconda.html. Then, in the “Anaconda Prompt” (Windows) or a Terminal (Mac/Linux), the command line version of C3 is installed using pip: “pip install CageCavityCalc”, this will install the required dependencies.
 
-For performing ESP and hydrophobicity calculation, C3 requires OpenBabel that can be installed using “conda install -c conda-forge openbabel” (or “conda config --add channels conda-forge” followed by “conda install openbabel”). For file loading in multiple formats, including files for molecular dynamics cavity analysis, requires installing MDAnalysis using “conda install -c conda-forge mdanalysis” (or “conda config --add channels conda-forge” followed by “conda install mdanalysis”). 
+For performing ESP and hydrophobicity calculation, C3 requires OpenBabel that can be installed using “conda install -c conda-forge openbabel” (or “conda config --add channels conda-forge” followed by “conda install openbabel”). For file loading in multiple formats, including files for molecular dynamics cavity analysis, requires installing MDAnalysis using “pip install MDAnalysis” (fastest) or “conda install -c conda-forge mdanalysis”, which can be very slow with older conda versions. 
 
 As with any program, to run CageCavityCalc from the command line it is needed to either add its installation folder to the system path or to execute the CageCavityCalc.py file directly from the folder. For example, in Windows the user needs to add the folder “C:\Users\UserName\miniconda3\Lib\site-packages\CageCavityCalc\” to the Python path navigating through the following menus: My Computer > Properties > Advanced System Settings > Environment Variables > PYTHONPATH.
 
